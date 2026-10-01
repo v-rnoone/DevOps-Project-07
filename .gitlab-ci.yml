@@ -1,0 +1,51 @@
+stages:
+  - test
+  - build
+  - deploy
+
+test-backend:
+  stage: test
+  image: node:20-alpine
+  script:
+    - cd backend
+    - npm install
+    - npm test
+
+# Kaniko builds images without needing a Docker daemon (works on shared runners)
+.build-template: &build
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - |
+      AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')
+      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" > /kaniko/.docker/config.json
+
+build-backend:
+  <<: *build
+  script:
+    - /kaniko/executor --context "$CI_PROJECT_DIR/backend" --dockerfile "$CI_PROJECT_DIR/backend/Dockerfile" --destination "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+
+build-frontend:
+  <<: *build
+  script:
+    - /kaniko/executor --context "$CI_PROJECT_DIR/frontend" --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile" --destination "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
+
+deploy:
+  stage: deploy
+  image: quay.io/openshift/origin-cli:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - oc login --token="$OPENSHIFT_TOKEN" --server="$OPENSHIFT_SERVER" --insecure-skip-tls-verify=true
+    - oc project "$OPENSHIFT_NAMESPACE"
+    # Backend first: nginx in the frontend needs the backend service name to exist
+    - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA|" k8s/backend.yaml
+    - oc apply -f k8s/backend.yaml
+    - oc rollout status deployment/backend --timeout=180s
+    - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA|" k8s/frontend.yaml
+    - oc apply -f k8s/frontend.yaml
+    - oc rollout status deployment/frontend --timeout=180s
+    - echo "App URL https://$(oc get route frontend -o jsonpath='{.spec.host}')"

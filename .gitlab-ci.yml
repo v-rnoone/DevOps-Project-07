@@ -1,3 +1,4 @@
+# Save as .gitlab-ci.yml in the ROOT of your GitLab repo.
 stages:
   - test
   - build
@@ -33,19 +34,22 @@ build-frontend:
   script:
     - /kaniko/executor --context "$CI_PROJECT_DIR/frontend" --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile" --destination "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
 
+# NEW: deploys the images built above to OpenShift (main branch only)
 deploy:
   stage: deploy
-  image: quay.io/openshift/origin-cli:latest
+  image:
+    name: quay.io/openshift/origin-cli:latest
+    entrypoint: [""]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - oc login --token="$OPENSHIFT_TOKEN" --server="$OPENSHIFT_SERVER" --insecure-skip-tls-verify=true
-    - oc project "$OPENSHIFT_NAMESPACE"
-    # Backend first: nginx in the frontend needs the backend service name to exist
+    # If login fails with an x509 certificate error, add --insecure-skip-tls-verify=true
+    - oc login --token="$OPENSHIFT_TOKEN" --server="$OPENSHIFT_SERVER"
+    # Backend first: nginx in the frontend needs the backend service to exist
     - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA|" k8s/backend.yaml
-    - oc apply -f k8s/backend.yaml
-    - oc rollout status deployment/backend --timeout=180s
+    - oc apply -n "$OPENSHIFT_NAMESPACE" -f k8s/backend.yaml
+    - oc rollout status deployment/backend -n "$OPENSHIFT_NAMESPACE" --timeout=180s
     - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA|" k8s/frontend.yaml
-    - oc apply -f k8s/frontend.yaml
-    - oc rollout status deployment/frontend --timeout=180s
-    - echo "App URL https://$(oc get route frontend -o jsonpath='{.spec.host}')"
+    - oc apply -n "$OPENSHIFT_NAMESPACE" -f k8s/frontend.yaml
+    - oc rollout status deployment/frontend -n "$OPENSHIFT_NAMESPACE" --timeout=180s
+    - echo "App URL https://$(oc get route frontend -n "$OPENSHIFT_NAMESPACE" -o jsonpath='{.spec.host}')"

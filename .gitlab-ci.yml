@@ -105,6 +105,7 @@ deploy:
 
       # Deploy frontend
       echo "Deploying frontend..."
+      oc delete deployment frontend --ignore-not-found=true
       oc apply -f /tmp/frontend.yaml
       oc rollout status deployment/frontend --timeout=180s
 

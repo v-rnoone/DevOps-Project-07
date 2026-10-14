@@ -99,6 +99,7 @@ deploy:
 
       # Deploy backend first
       echo "Deploying backend..."
+      oc delete deployment backend --ignore-not-found=true
       oc apply -f /tmp/backend.yaml
       oc rollout status deployment/backend --timeout=180s
 

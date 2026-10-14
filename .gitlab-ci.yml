@@ -13,7 +13,7 @@ test-backend:
   image: node:20-alpine
   script:
     - cd backend
-    - npm ci
+    - npm install
     - npm test
 
 # -------------------------

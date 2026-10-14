@@ -1,18 +1,24 @@
-# Save as .gitlab-ci.yml in the ROOT of your GitLab repo.
+# .gitlab-ci.yml
+
 stages:
   - test
   - build
   - deploy
 
+# -------------------------
+# 1. Test backend
+# -------------------------
 test-backend:
   stage: test
   image: node:20-alpine
   script:
     - cd backend
-    - npm install
+    - npm ci
     - npm test
 
-# Kaniko builds images without needing a Docker daemon (works on shared runners)
+# -------------------------
+# 2. Build and push images
+# -------------------------
 .build-template: &build
   stage: build
   image:
@@ -21,35 +27,91 @@ test-backend:
   before_script:
     - mkdir -p /kaniko/.docker
     - |
-      AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" | base64 | tr -d '\n')
-      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" > /kaniko/.docker/config.json
+      AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" |
+        base64 | tr -d '\n')
+      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" \
+        > /kaniko/.docker/config.json
 
 build-backend:
   <<: *build
   script:
-    - /kaniko/executor --context "$CI_PROJECT_DIR/backend" --dockerfile "$CI_PROJECT_DIR/backend/Dockerfile" --destination "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+    - >
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR/backend"
+      --dockerfile "$CI_PROJECT_DIR/backend/Dockerfile"
+      --destination "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
 
 build-frontend:
   <<: *build
   script:
-    - /kaniko/executor --context "$CI_PROJECT_DIR/frontend" --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile" --destination "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
+    - >
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR/frontend"
+      --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile"
+      --destination "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
 
-# NEW: deploys the images built above to OpenShift (main branch only)
+# -------------------------
+# 3. Deploy to OpenShift
+# -------------------------
 deploy:
   stage: deploy
   image:
     name: quay.io/openshift/origin-cli:latest
     entrypoint: [""]
+
+  needs:
+    - build-backend
+    - build-frontend
+
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
   script:
-    # If login fails with an x509 certificate error, add --insecure-skip-tls-verify=true
-    - oc login --token="$OPENSHIFT_TOKEN" --server="$OPENSHIFT_SERVER"
-    # Backend first: nginx in the frontend needs the backend service to exist
-    - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA|" k8s/backend.yaml
-    - oc apply -n "$OPENSHIFT_NAMESPACE" -f k8s/backend.yaml
-    - oc rollout status deployment/backend -n "$OPENSHIFT_NAMESPACE" --timeout=180s
-    - sed -i "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA|" k8s/frontend.yaml
-    - oc apply -n "$OPENSHIFT_NAMESPACE" -f k8s/frontend.yaml
-    - oc rollout status deployment/frontend -n "$OPENSHIFT_NAMESPACE" --timeout=180s
-    - echo "App URL https://$(oc get route frontend -n "$OPENSHIFT_NAMESPACE" -o jsonpath='{.spec.host}')"
+    - |
+      set -eu
+
+      # Validate required GitLab CI/CD variables
+      : "${OPENSHIFT_SERVER:?Missing OPENSHIFT_SERVER in GitLab CI/CD Variables}"
+      : "${OPENSHIFT_TOKEN:?Missing OPENSHIFT_TOKEN in GitLab CI/CD Variables}"
+      : "${OPENSHIFT_NAMESPACE:?Missing OPENSHIFT_NAMESPACE in GitLab CI/CD Variables}"
+
+      echo "Connecting to OpenShift..."
+      echo "API server: $OPENSHIFT_SERVER"
+      echo "Project: $OPENSHIFT_NAMESPACE"
+
+      # Authenticate
+      oc login "$OPENSHIFT_SERVER" \
+        --token="$OPENSHIFT_TOKEN"
+
+      oc project "$OPENSHIFT_NAMESPACE"
+
+      # Verify deployment permissions
+      oc auth can-i get deployments
+      oc auth can-i create deployments
+      oc auth can-i create services
+
+      # Prepare manifests without modifying tracked repository files
+      sed "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA|g" \
+        k8s/backend.yaml > /tmp/backend.yaml
+
+      sed "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA|g" \
+        k8s/frontend.yaml > /tmp/frontend.yaml
+
+      # Deploy backend first
+      echo "Deploying backend..."
+      oc apply -f /tmp/backend.yaml
+      oc rollout status deployment/backend --timeout=180s
+
+      # Deploy frontend
+      echo "Deploying frontend..."
+      oc apply -f /tmp/frontend.yaml
+      oc rollout status deployment/frontend --timeout=180s
+
+      # Create public Route if it does not exist
+      if ! oc get route frontend >/dev/null 2>&1; then
+        oc expose service/frontend
+      fi
+
+      # Display application URL
+      ROUTE_HOST=$(oc get route frontend -o jsonpath='{.spec.host}')
+      echo "Application URL: https://${ROUTE_HOST}"

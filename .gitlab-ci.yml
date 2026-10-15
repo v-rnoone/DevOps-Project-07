@@ -5,115 +5,53 @@ stages:
   - build
   - deploy
 
-# -------------------------
-# 1. Test backend
-# -------------------------
+variables:
+  NAMESPACE: myapp
+
+default:
+  tags: [windows-local]
+
 test-backend:
   stage: test
-  image: node:20-alpine
   script:
-    - cd backend
+    - Set-Location backend
     - npm install
     - npm test
 
-# -------------------------
-# 2. Build and push images
-# -------------------------
-.build-template: &build
-  stage: build
-  image:
-    name: gcr.io/kaniko-project/executor:v1.23.2-debug
-    entrypoint: [""]
-  before_script:
-    - mkdir -p /kaniko/.docker
-    - |
-      AUTH=$(printf '%s:%s' "$CI_REGISTRY_USER" "$CI_REGISTRY_PASSWORD" |
-        base64 | tr -d '\n')
-      echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$AUTH\"}}}" \
-        > /kaniko/.docker/config.json
-
 build-backend:
-  <<: *build
+  stage: build
   script:
-    - >
-      /kaniko/executor
-      --context "$CI_PROJECT_DIR/backend"
-      --dockerfile "$CI_PROJECT_DIR/backend/Dockerfile"
-      --destination "$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA"
+    - $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
+    - docker build -t "$env:CI_REGISTRY_IMAGE/backend:$env:CI_COMMIT_SHORT_SHA" ./backend
+    - docker push "$env:CI_REGISTRY_IMAGE/backend:$env:CI_COMMIT_SHORT_SHA"
 
 build-frontend:
-  <<: *build
+  stage: build
   script:
-    - >
-      /kaniko/executor
-      --context "$CI_PROJECT_DIR/frontend"
-      --dockerfile "$CI_PROJECT_DIR/frontend/Dockerfile"
-      --destination "$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA"
+    - $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
+    - docker build -t "$env:CI_REGISTRY_IMAGE/frontend:$env:CI_COMMIT_SHORT_SHA" ./frontend
+    - docker push "$env:CI_REGISTRY_IMAGE/frontend:$env:CI_COMMIT_SHORT_SHA"
 
-# -------------------------
-# 3. Deploy to OpenShift
-# -------------------------
 deploy:
   stage: deploy
-  image:
-    name: quay.io/openshift/origin-cli:latest
-    entrypoint: [""]
-
-  needs:
-    - build-backend
-    - build-frontend
-
+  needs: [build-backend, build-frontend]
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-
   script:
-    - |
-      set -eu
+    - kubectl config use-context docker-desktop
 
-      # Validate required GitLab CI/CD variables
-      : "${OPENSHIFT_SERVER:?Missing OPENSHIFT_SERVER in GitLab CI/CD Variables}"
-      : "${OPENSHIFT_TOKEN:?Missing OPENSHIFT_TOKEN in GitLab CI/CD Variables}"
-      : "${OPENSHIFT_NAMESPACE:?Missing OPENSHIFT_NAMESPACE in GitLab CI/CD Variables}"
+    # Namespace and pull secret (safe to re-run)
+    - kubectl create namespace $env:NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+    - kubectl create secret docker-registry gitlab-registry --namespace $env:NAMESPACE --docker-server=$env:CI_REGISTRY --docker-username=$env:DEPLOY_USER --docker-password=$env:DEPLOY_TOKEN --dry-run=client -o yaml | kubectl apply -f -
 
-      echo "Connecting to OpenShift..."
-      echo "API server: $OPENSHIFT_SERVER"
-      echo "Project: $OPENSHIFT_NAMESPACE"
+    # Fill in image names in temp files, repo files stay untouched
+    - (Get-Content k8s/backend.yaml) -replace 'IMAGE_PLACEHOLDER', "$env:CI_REGISTRY_IMAGE/backend:$env:CI_COMMIT_SHORT_SHA" | Set-Content "$env:TEMP\backend.yaml"
+    - (Get-Content k8s/frontend.yaml) -replace 'IMAGE_PLACEHOLDER', "$env:CI_REGISTRY_IMAGE/frontend:$env:CI_COMMIT_SHORT_SHA" | Set-Content "$env:TEMP\frontend.yaml"
 
-      # Authenticate
-      oc login "$OPENSHIFT_SERVER" \
-        --token="$OPENSHIFT_TOKEN"
+    # Backend first, then frontend
+    - kubectl apply -n $env:NAMESPACE -f "$env:TEMP\backend.yaml"
+    - kubectl rollout status deployment/backend -n $env:NAMESPACE --timeout=180s
+    - kubectl apply -n $env:NAMESPACE -f "$env:TEMP\frontend.yaml"
+    - kubectl rollout status deployment/frontend -n $env:NAMESPACE --timeout=180s
 
-      oc project "$OPENSHIFT_NAMESPACE"
-
-      # Verify deployment permissions
-      oc auth can-i get deployments
-      oc auth can-i create deployments
-      oc auth can-i create services
-
-      # Prepare manifests without modifying tracked repository files
-      sed "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHORT_SHA|g" \
-        k8s/backend.yaml > /tmp/backend.yaml
-
-      sed "s|IMAGE_PLACEHOLDER|$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA|g" \
-        k8s/frontend.yaml > /tmp/frontend.yaml
-
-      # Deploy backend first
-      echo "Deploying backend..."
-      oc delete deployment backend --ignore-not-found=true
-      oc apply -f /tmp/backend.yaml
-      oc rollout status deployment/backend --timeout=180s
-
-      # Deploy frontend
-      echo "Deploying frontend..."
-      oc delete deployment frontend --ignore-not-found=true
-      oc apply -f /tmp/frontend.yaml
-      oc rollout status deployment/frontend --timeout=180s
-
-      # Create public Route if it does not exist
-      if ! oc get route frontend >/dev/null 2>&1; then
-        oc expose service/frontend
-      fi
-
-      # Display application URL
-      ROUTE_HOST=$(oc get route frontend -o jsonpath='{.spec.host}')
-      echo "Application URL: https://${ROUTE_HOST}"
+    - kubectl get svc frontend -n $env:NAMESPACE

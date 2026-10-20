@@ -1,57 +1,31 @@
-# .gitlab-ci.yml
-
 stages:
-  - test
   - build
+  - test
   - deploy
 
-variables:
-  NAMESPACE: myapp
+compile:
+  stage: build
+  image: node:20
+  script:
+    - echo "Compiling the code"
+    - echo "compilation is complete"
 
-# default:
-#   tags: [windows-local]
+validate:
+  stage: build
+  image: ruby:3.1
+  needs:
+    - compile
+  script:
+    - echo "validating the code"
+    - echo "validation is complete"
 
-test-backend:
+security-test:
   stage: test
+  image: ubuntu:24.04
   script:
-    - Set-Location backend
-    - npm install
-    - npm test
+    - echo "Running SonarQube Analysis"
 
-build-backend:
-  stage: build
-  script:
-    - $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
-    - docker build -t "$env:CI_REGISTRY_IMAGE/backend:$env:CI_COMMIT_SHORT_SHA" ./backend
-    - docker push "$env:CI_REGISTRY_IMAGE/backend:$env:CI_COMMIT_SHORT_SHA"
-
-build-frontend:
-  stage: build
-  script:
-    - $env:CI_REGISTRY_PASSWORD | docker login -u $env:CI_REGISTRY_USER --password-stdin $env:CI_REGISTRY
-    - docker build -t "$env:CI_REGISTRY_IMAGE/frontend:$env:CI_COMMIT_SHORT_SHA" ./frontend
-    - docker push "$env:CI_REGISTRY_IMAGE/frontend:$env:CI_COMMIT_SHORT_SHA"
-
-deploy:
+deploy-job:
   stage: deploy
-  needs: [build-backend, build-frontend]
-  rules:
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   script:
-    - kubectl config use-context docker-desktop
-
-    # Namespace and pull secret (safe to re-run)
-    - kubectl create namespace $env:NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-    - kubectl create secret docker-registry gitlab-registry --namespace $env:NAMESPACE --docker-server=$env:CI_REGISTRY --docker-username=$env:DEPLOY_USER --docker-password=$env:DEPLOY_TOKEN --dry-run=client -o yaml | kubectl apply -f -
-
-    # Fill in image names in temp files, repo files stay untouched
-    - (Get-Content k8s/backend.yaml) -replace 'IMAGE_PLACEHOLDER', "$env:CI_REGISTRY_IMAGE/backend:$env:CI_COMMIT_SHORT_SHA" | Set-Content "$env:TEMP\backend.yaml"
-    - (Get-Content k8s/frontend.yaml) -replace 'IMAGE_PLACEHOLDER', "$env:CI_REGISTRY_IMAGE/frontend:$env:CI_COMMIT_SHORT_SHA" | Set-Content "$env:TEMP\frontend.yaml"
-
-    # Backend first, then frontend
-    - kubectl apply -n $env:NAMESPACE -f "$env:TEMP\backend.yaml"
-    - kubectl rollout status deployment/backend -n $env:NAMESPACE --timeout=180s
-    - kubectl apply -n $env:NAMESPACE -f "$env:TEMP\frontend.yaml"
-    - kubectl rollout status deployment/frontend -n $env:NAMESPACE --timeout=180s
-
-    - kubectl get svc frontend -n $env:NAMESPACE
+    - echo "Deploying"

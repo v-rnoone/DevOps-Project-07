@@ -8,8 +8,8 @@ stages:
 variables:
   NAMESPACE: myapp
 
-default:
-  tags: [windows-local]
+# default:
+#   tags: [windows-local]
 
 test-backend:
   stage: test

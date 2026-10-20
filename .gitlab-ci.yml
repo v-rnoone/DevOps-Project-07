@@ -5,14 +5,16 @@ stages:
 
 compile:
   stage: build
-  image: node:20
+  tags:
+    - self-hosted
   script:
     - echo "Compiling the code"
     - echo "compilation is complete"
 
 validate:
   stage: build
-  image: ruby:3.1
+  tags:
+    - self-hosted
   needs:
     - compile
   script:
@@ -27,5 +29,7 @@ security-test:
 
 deploy-job:
   stage: deploy
+  tags:
+    - self-hosted
   script:
     - echo "Deploying"

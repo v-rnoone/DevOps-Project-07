@@ -3,13 +3,21 @@ stages:
   - test
   - deploy
 
-compile:
+variables:
+  X=123
+  
+build-push job:
   stage: build
   tags:
     - self-hosted
-  script:
-    - echo "Compiling the code"
-    - echo "compilation is complete"
+  image: docker:27
+  services:
+    - docker:27-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - echo "$X"
+  
+
 
 validate:
   stage: build

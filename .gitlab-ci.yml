@@ -27,6 +27,10 @@ validate:
     - echo "validation is complete"
     - echo "$X"
     - 'echo "branch: $CI_COMMIT_BRANCH"'
+    - 'echo "Hi, store this as a  text file" > /build/file.txt'
+  artifacts:
+    paths:
+      - "/build"
   # when: manual
 
 security-test:

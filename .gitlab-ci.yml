@@ -18,8 +18,8 @@ stages:
 
 validate:
   stage: build
-  tags:
-    - self-hosted
+  # tags:
+  #   - self-hosted
   # needs:
   #   - compile
   script:
@@ -29,16 +29,21 @@ validate:
     - 'echo "branch: $CI_COMMIT_BRANCH"'
     - mkdir build
     - echo "Hi, store this as a  text file" > build/file.txt
-  artifacts:
+  # artifacts:
+  #   paths:
+  #     - build/
+  # # when: manual
+
+  cache:
     paths:
-      - build/
-  # when: manual
+      - -build
 
 security-test:
   stage: test
   image: ubuntu:24.04
   script:
     - echo "Running SonarQube Analysis"
+    - echo "cat build/file.txt"
 
 deploy-job:
   stage: deploy

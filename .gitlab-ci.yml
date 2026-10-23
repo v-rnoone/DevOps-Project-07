@@ -26,6 +26,7 @@ validate:
     - echo "validating the code"
     - echo "validation is complete"
     - echo "$X"
+    - 'echo "branch:$CI_COMMIT_BRANCH"'
   when: manual
 
 security-test:

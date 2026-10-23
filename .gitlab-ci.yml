@@ -28,10 +28,10 @@ validate:
     - echo "$X"
     - 'echo "branch: $CI_COMMIT_BRANCH"'
     - mkdir build
-    - echo "Hi, store this as a  text file" > /build/file.txt
+    - echo "Hi, store this as a  text file" > build/file.txt
   artifacts:
     paths:
-      - build
+      - build/
   # when: manual
 
 security-test:

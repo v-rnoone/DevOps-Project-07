@@ -26,7 +26,7 @@ validate:
     - echo "validating the code"
     - echo "validation is complete"
     - echo "$X"
-    - echo "$X"
+  when: manual
 
 security-test:
   stage: test

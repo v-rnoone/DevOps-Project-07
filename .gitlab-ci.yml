@@ -30,7 +30,7 @@ validate:
     - echo "validation is complete"
     - echo "$X"
     - 'echo "branch: $CI_COMMIT_BRANCH"'
-    - mkdir build
+    - mkdir -p build
     - echo "Hi, store this as a  text file" > build/file.txt
   # artifacts:
   #   paths:

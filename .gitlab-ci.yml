@@ -44,7 +44,7 @@ security-test:
   image: ubuntu:24.04
   script:
     - echo "Running SonarQube Analysis"
-    - cat build/file.txt"
+    - cat build/file.txt
 
 deploy-job:
   stage: deploy

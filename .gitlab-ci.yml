@@ -17,15 +17,15 @@ build-image-backend:
   script: |
     docker info
     docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    docker build -t $CI_REGISTRY_IMAGE:v1 ./backend
-    docker push $CI_REGISTRY_IMAGE:v1
+    docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA ./backend
+    docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
 
 build-image-frontend:
   stage: build
   script: |
     docker info
     docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    docker build -t $CI_REGISTRY_IMAGE:v1 ./frontend
-    docker push $CI_REGISTRY_IMAGE:v1
+    docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA ./frontend
+    docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
     
 

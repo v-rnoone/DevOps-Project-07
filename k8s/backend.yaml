@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: IMAGE_PLACEHOLDER
+          image: $CI_COMMIT_SHA
           ports:
             - containerPort: 8080
           resources:

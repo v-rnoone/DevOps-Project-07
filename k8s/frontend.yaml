@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend
+  name: task-tracker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: frontend
+      app: task-tracker
   template:
     metadata:
       labels:
-        app: frontend
+        app: task-tracker
     spec:
       containers:
         - name: frontend
@@ -30,10 +30,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: frontend
+  name: task-tracker
 spec:
   selector:
-    app: frontend
+    app: task-tracker
   ports:
     - port: 8080
       targetPort: 8080
@@ -41,7 +41,7 @@ spec:
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: frontend
+  name: task-tracker
 spec:
   to:
     kind: Service

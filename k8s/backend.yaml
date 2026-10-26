@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: backend
+  name: task-tracker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: backend
+      app: task-tracker
   template:
     metadata:
       labels:
-        app: backend
+        app: task-tracker
     spec:
       containers:
         - name: backend
@@ -30,10 +30,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: backend
+  name: task-tracker
 spec:
   selector:
-    app: backend
+    app: task-tracker
   ports:
     - port: 8080
       targetPort: 8080

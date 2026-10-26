@@ -1,4 +1,4 @@
-image: docker:24
+# image: docker:24
 
 services:
   - docker:24-dind
@@ -42,7 +42,7 @@ deploy-build:
     - self-hosted
   script:
     - kubectl set image deployment/backend backend=$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -n task-tracker
-    - kubectl set image deployment/frontend frontend=$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA -n task-tracker
+    - kubectl set image deployment/frontend frontend=$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -n task-tracker
     - kubectl rollout status deployment/backend -n task-tracker
     - kubectl rollout status deployment/frontend -n task-tracker
     

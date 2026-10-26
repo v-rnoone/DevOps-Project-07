@@ -52,7 +52,7 @@ deploy-build:
   tags:
     - self-hosted
   script:
-    - kubectl apply -f k8s/
+    - kubectl apply -f k8s/ -n task-tracker
     - kubectl set image deployment/backend backend=$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -n task-tracker
     - kubectl set image deployment/frontend frontend=$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA -n task-tracker
     - kubectl rollout status deployment/backend -n task-tracker

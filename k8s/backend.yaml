@@ -12,6 +12,8 @@ spec:
       labels:
         app: backend
     spec:
+      imagePullSecrets:
+        - name: gitlab-registry
       containers:
         - name: backend
           image: $CI_COMMIT_SHA

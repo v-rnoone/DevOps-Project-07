@@ -1,57 +1,22 @@
+image: docker:24
+
+services:
+  - docker:24-dind
+
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
 stages:
   - build
-  - test
-  - deploy
-  
-# build-push job:
-#   stage: build
-#   tags:
-#     - self-hosted
-#   image: docker:27
-#   services:
-#     - docker:27-dind
-#   before_script:
-#     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-#     - echo "$X"
+  # - test
+  # - deploy
 
-
-cache:
-  key: my-cache
-  paths:
-    - build/
-
-validate:
+build-image:
   stage: build
-  # tags:
-  #   - self-hosted
-  # needs:
-  #   - compile
-  script:
-    - echo "validating the code"
-    - echo "validation is complete"
-    - echo "$X"
-    - 'echo "branch: $CI_COMMIT_BRANCH"'
-    - mkdir -p build
-    - echo "Hi, store this as a  text file" > build/file.txt
-  # artifacts:
-  #   paths:
-  #     - build/
-  # # when: manual
-  except:
-    - main
+  script: |
+    docker info
+    docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    docker build -t $CI_REGISTRY_IMAGE:latest .
+    docker push $CI_REGISTRY_IMAGE:latest
 
-
-
-security-test:
-  stage: test
-  image: ubuntu:24.04
-  script:
-    - echo "Running SonarQube Analysis"
-    - cat build/file.txt
-
-deploy-job:
-  stage: deploy
-  tags:
-    - self-hosted
-  script:
-    - echo "Deploying"

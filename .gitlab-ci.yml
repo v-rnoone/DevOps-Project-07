@@ -38,7 +38,6 @@ build-image-frontend:
 
 deploy-build:
   stage: deploy
-  image: alpine:20
   script:
     - kubectl set image deployment/backend backend=$CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA -n task-tracker
     - kubectl set image deployment/frontend frontend=$CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHORT_SHA -n task-tracker

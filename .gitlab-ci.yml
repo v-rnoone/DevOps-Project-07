@@ -45,6 +45,10 @@ build-image-frontend:
 
 deploy-build:
   stage: deploy
+  image: 
+    name: bitnami/kubectl:latest
+    entrypoint: [""]
+
   tags:
     - self-hosted
   script:

@@ -19,10 +19,10 @@ build-image-backend:
     docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA ./backend
     docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
-  rules:
-    - changes: 
-        - backend/**
-        - .gitlab-ci.yaml
+  # rules:
+  #   - changes: 
+  #       - backend/**
+  #       - .gitlab-ci.yaml
 
 build-image-frontend:
   stage: build
@@ -31,9 +31,9 @@ build-image-frontend:
     docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA ./frontend
     docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
-  rules:
-    - changes: 
-        - frontend/**
-        - gitlab-ci.yaml
+  # rules:
+  #   - changes: 
+  #       - frontend/**
+  #       - gitlab-ci.yaml
     
 
